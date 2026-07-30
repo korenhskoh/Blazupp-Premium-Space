@@ -113,6 +113,22 @@
   .gate p{color:#c7d2ea;font-size:13.5px;margin:0;max-width:340px}
   .gate .lbl{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.1em;color:#e8a89f}
 
+  /* status screen (Off / Scheduled) */
+  .statuscard{
+    position:absolute;inset:0;z-index:7;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:12px;text-align:center;padding:28px;
+    background:radial-gradient(650px 320px at 50% 38%, rgba(19,40,107,.55), rgba(6,12,32,.94));
+  }
+  .statuscard .lbl{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.1em;color:#9fb6ee}
+  .statuscard .stat-ic{font-size:40px;line-height:1}
+  .statuscard h2{font-family:var(--display);font-weight:800;font-size:21px;margin:2px 0 0}
+  .statuscard p{color:#c7d2ea;font-size:13.5px;margin:0;max-width:380px;line-height:1.55}
+  .countdown{display:flex;gap:10px;margin-top:8px}
+  .countdown .cd-cell{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+    border-radius:12px;padding:10px 14px;min-width:58px;display:flex;flex-direction:column;align-items:center;gap:2px}
+  .countdown .cd-cell b{font-family:var(--display);font-weight:800;font-size:24px;color:#fff;line-height:1;font-variant-numeric:tabular-nums}
+  .countdown .cd-cell span{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#9fb6ee}
+
   /* ---- below-video info ---- */
   .info{margin-top:16px}
   .info h1{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.01em;margin:0 0 6px;line-height:1.2}
@@ -217,6 +233,20 @@
             <h2>Tap to join the session</h2>
             <p>The stream is already running — tap to enter with sound.</p>
           </div>
+
+          <!-- status screen: shown when demo is Off or Scheduled (hides the gate/video) -->
+          <div class="statuscard" id="statusCard" style="display:none">
+            <span class="lbl" id="statusEyebrow">● OFFLINE</span>
+            <div class="stat-ic" id="statusIcon">🎬</div>
+            <h2 id="statusTitle">No live session right now</h2>
+            <p id="statusMsg">The next demo hasn't been scheduled yet — check back soon, or subscribe below and we'll let you know.</p>
+            <div class="countdown" id="statusCountdown" style="display:none">
+              <div class="cd-cell"><b id="cdD">0</b><span>days</span></div>
+              <div class="cd-cell"><b id="cdH">0</b><span>hrs</span></div>
+              <div class="cd-cell"><b id="cdM">0</b><span>min</span></div>
+              <div class="cd-cell"><b id="cdS">0</b><span>sec</span></div>
+            </div>
+          </div>
         </div>
 
         <div class="info">
@@ -284,16 +314,97 @@
     var ctaSub=document.getElementById("ctaSub");
     if(ctaSub){
       if(cfg.ctaText && cfg.ctaText.trim()) ctaSub.textContent=cfg.ctaText;
-      if(cfg.ctaUrl && cfg.ctaUrl.trim()) CONFIG.subscribeUrl=cfg.ctaUrl;
+      if(cfg.ctaUrl && cfg.ctaUrl.trim()){
+        CONFIG.subscribeUrl=cfg.ctaUrl;
+        ctaSub.href=cfg.ctaUrl;                 // real link (right-click / open-in-new-tab works)
+        ctaSub.setAttribute("target","_blank"); // don't kick the viewer off the live stream
+        ctaSub.setAttribute("rel","noopener");
+      }
     }
-    // numbers
-    if(Number(cfg.viewers)>0) CONFIG.viewersBase=Number(cfg.viewers);
-    if(Number(cfg.jitter)>0)  CONFIG.viewersJitter=Number(cfg.jitter);
+    // numbers — accept an explicit Min/Max range, else fall back to base + drift
+    var vmin=Number(cfg.viewersMin), vmax=Number(cfg.viewersMax);
+    if(vmin>0 && vmax>0 && vmax>=vmin){
+      CONFIG.viewersBase   = Math.round((vmin+vmax)/2);
+      CONFIG.viewersJitter = Math.round((vmax-vmin)/2);
+    } else {
+      if(Number(cfg.viewers)>0) CONFIG.viewersBase=Number(cfg.viewers);
+      if(Number(cfg.jitter)>0)  CONFIG.viewersJitter=Number(cfg.jitter);
+    }
     // re-seed the live viewer count around the new base
     if(typeof resetViewers==="function") resetViewers();
     // chat seed lines
     if(Array.isArray(cfg.chat) && cfg.chat.length) LINES = cfg.chat.slice();
     else if(typeof cfg.chat==="string" && cfg.chat.trim()) LINES = cfg.chat.split("\n").map(function(x){return x.trim();}).filter(Boolean);
+    // demo on/off/scheduled
+    applyDemoStatus(cfg);
+  }
+
+  var _cdTimer=null;
+  function applyDemoStatus(cfg){
+    var status=(cfg && cfg.demoStatus) || "live";        // live | off | scheduled
+    var startAt=cfg && cfg.demoStartAt ? new Date(cfg.demoStartAt) : null;
+    var startOk=startAt && !isNaN(startAt.getTime());
+    // if scheduled but the time has already passed, it's live
+    if(status==="scheduled" && startOk && Date.now() >= startAt.getTime()) status="live";
+
+    var card=document.getElementById("statusCard");
+    var gate=document.getElementById("gate");
+    var vid=document.getElementById("vid");
+    if(_cdTimer){ clearInterval(_cdTimer); _cdTimer=null; }
+
+    // helper: toggle the little "LIVE" chrome (top badge + overlay pill + viewers)
+    function showLiveChrome(on){
+      document.querySelectorAll(".badge-live, .ov.tl, .livebar").forEach(function(el){
+        if(el) el.style.display = on ? "" : "none";
+      });
+    }
+
+    if(status==="live"){
+      if(card) card.style.display="none";
+      if(gate) gate.style.display="";           // gate handles tap-to-play
+      showLiveChrome(true);
+      if(window.__blzStartChat) window.__blzStartChat();   // resume the live chat feed
+      return;
+    }
+
+    // OFF or SCHEDULED — cover the player, pause/hide the video, hide live chrome
+    if(gate) gate.style.display="none";
+    if(vid){ try{ vid.pause(); }catch(e){} }
+    showLiveChrome(false);
+    if(window.__blzStopChat) window.__blzStopChat();        // no auto-chat when not live
+    if(card) card.style.display="";
+
+    var eyebrow=document.getElementById("statusEyebrow");
+    var icon=document.getElementById("statusIcon");
+    var title=document.getElementById("statusTitle");
+    var msg=document.getElementById("statusMsg");
+    var cd=document.getElementById("statusCountdown");
+
+    if(status==="scheduled" && startOk){
+      if(eyebrow) eyebrow.textContent="● STARTING SOON";
+      if(icon) icon.textContent="⏳";
+      if(title) title.textContent = (cfg.scheduledTitle && cfg.scheduledTitle.trim()) || "Live demo starts soon";
+      var whenStr = startAt.toLocaleString(undefined,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+      if(msg) msg.textContent = (cfg.scheduledMsg && cfg.scheduledMsg.trim()) || ("Join us on "+whenStr+". Subscribe below and we'll remind you.");
+      if(cd){
+        cd.style.display="";
+        var tick=function(){
+          var diff=startAt.getTime()-Date.now();
+          if(diff<=0){ clearInterval(_cdTimer); _cdTimer=null; applyDemoStatus(cfg); return; }  // flip to live
+          var s=Math.floor(diff/1000), d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60), sec=s%60;
+          var set=function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+          set("cdD",d); set("cdH",h); set("cdM",m); set("cdS",sec);
+        };
+        tick(); _cdTimer=setInterval(tick,1000);
+      }
+    } else {
+      // OFF (no demo)
+      if(eyebrow) eyebrow.textContent="● OFFLINE";
+      if(icon) icon.textContent="🎬";
+      if(title) title.textContent = (cfg.offTitle && cfg.offTitle.trim()) || "No live session right now";
+      if(msg) msg.textContent = (cfg.offMsg && cfg.offMsg.trim()) || "The next demo hasn't been scheduled yet — check back soon, or subscribe below and we'll let you know.";
+      if(cd) cd.style.display="none";
+    }
   }
 
   async function loadRemoteConfig(){
@@ -404,12 +515,14 @@
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
   // seed a few so it doesn't start empty
-  (function seed(){
+  function seedChat(){
+    if(feed.children.length) return;              // already seeded
     addMsg(HOST_LINES[0].who, HOST_LINES[0].text, {host:true});
     for(var i=0;i<4;i++) addMsg(pick(NAMES), pick(LINES));
-  })();
+  }
 
   var hostIdx = 1;
+  var _chatTimer = null;
   function tickChat(){
     // ~1 in 7 messages is from the host, to feel guided
     if(Math.random() < 0.14 && hostIdx < HOST_LINES.length){
@@ -417,9 +530,26 @@
     } else {
       addMsg(pick(NAMES), pick(LINES));
     }
-    setTimeout(tickChat, rnd(CONFIG.chatMinGap, CONFIG.chatMaxGap));
+    _chatTimer = setTimeout(tickChat, rnd(CONFIG.chatMinGap, CONFIG.chatMaxGap));
   }
-  setTimeout(tickChat, rnd(CONFIG.chatMinGap, CONFIG.chatMaxGap));
+  // Auto-chat only runs while the demo is actually live.
+  function startChat(){
+    if(_chatTimer) return;                         // already running
+    seedChat();
+    _chatTimer = setTimeout(tickChat, rnd(CONFIG.chatMinGap, CONFIG.chatMaxGap));
+  }
+  function stopChat(){
+    if(_chatTimer){ clearTimeout(_chatTimer); _chatTimer=null; }
+    // clear any auto-seeded messages so an off/scheduled stream doesn't show a fake conversation
+    if(feed){ while(feed.firstChild) feed.removeChild(feed.firstChild); }
+    hostIdx = 1;
+  }
+  // expose so applyDemoStatus() (defined earlier) can drive it
+  window.__blzStartChat = startChat;
+  window.__blzStopChat  = stopChat;
+  // If config hasn't loaded yet, the page defaults to live — start so it never looks dead.
+  // applyDemoStatus() will stop it immediately if admin has set Off/Scheduled.
+  startChat();
 
   // let the viewer "chat" too (local only)
   var input = document.getElementById("chatInput");
@@ -481,8 +611,10 @@
 
   // CTA hooks
   document.getElementById("ctaSub").addEventListener("click", function(e){
+    // No URL configured yet — do nothing (don't navigate to "#").
+    // When a URL IS set, applyConfig() has already set href + target="_blank",
+    // so we let the browser open it in a new tab natively.
     if(CONFIG.subscribeUrl==="#"){ e.preventDefault(); }
-    else window.location.href = CONFIG.subscribeUrl;
   });
   document.getElementById("ctaAsk").addEventListener("click", function(e){
     e.preventDefault(); input.focus();
