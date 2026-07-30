@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blazupp Premium — Live Session</title>
+<style>
+  :root{
+    --bg:#0b1020;          /* deep console navy */
+    --panel:#121a30;
+    --panel-2:#0e1526;
+    --line:#22304f;
+    --ink:#eef2fb;
+    --ink-soft:#93a2c4;
+    --ink-dim:#61708f;
+    --blue:#2f6bff;
+    --gold:#e0b13c;
+    --live:#ff2d43;
+    --ok:#33d69f;
+    --radius:14px;
+    --shadow:0 24px 60px rgba(0,0,0,.5);
+    --display:'Plus Jakarta Sans',system-ui,sans-serif;
+    --body:'Inter',system-ui,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:var(--body);
+    background:
+      radial-gradient(1200px 600px at 70% -10%, rgba(47,107,255,.14), transparent 60%),
+      radial-gradient(900px 500px at 0% 110%, rgba(224,177,60,.08), transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .wrap{max-width:1240px;margin:0 auto;padding:20px 20px 40px}
+
+  /* ---- top bar ---- */
+  .topbar{display:flex;align-items:center;gap:14px;padding:6px 2px 18px}
+  .brand{display:flex;align-items:center;gap:11px;min-width:0}
+  .brand .logo{
+    width:38px;height:38px;border-radius:10px;flex:none;
+    background:linear-gradient(135deg,#2f6bff,#1745c9);
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--display);font-weight:800;color:#fff;font-size:19px;
+    box-shadow:0 6px 18px rgba(47,107,255,.4);
+  }
+  .brand .txt{min-width:0}
+  .brand .txt b{font-family:var(--display);font-weight:800;font-size:16px;letter-spacing:-.01em;display:block;line-height:1.15}
+  .brand .txt span{font-size:12px;color:var(--ink-soft)}
+  .topbar .spacer{flex:1}
+  .badge-live{
+    display:inline-flex;align-items:center;gap:7px;
+    background:var(--live);color:#fff;font-family:var(--display);font-weight:800;
+    font-size:12px;letter-spacing:.08em;padding:6px 11px;border-radius:8px;
+    box-shadow:0 6px 18px rgba(255,45,67,.4);
+  }
+  .badge-live .dot{width:8px;height:8px;border-radius:50%;background:#fff;animation:blink 1.4s infinite}
+  @keyframes blink{0%,60%{opacity:1}80%{opacity:.25}100%{opacity:1}}
+
+  /* ---- layout ---- */
+  .stage{display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start}
+  @media(max-width:920px){ .stage{grid-template-columns:1fr} }
+
+  /* ---- video panel ---- */
+  .player{
+    position:relative;background:#000;border-radius:var(--radius);overflow:hidden;
+    border:1px solid var(--line);box-shadow:var(--shadow);aspect-ratio:16/9;
+  }
+  .player video{width:100%;height:100%;display:block;object-fit:cover;background:#000}
+  /* overlay chrome */
+  .ov{position:absolute;pointer-events:none;z-index:3}
+  .ov.tl{top:12px;left:12px;display:flex;gap:8px;align-items:center}
+  .ov.tr{top:12px;right:12px}
+  .pill{
+    display:inline-flex;align-items:center;gap:7px;background:rgba(8,12,24,.72);
+    backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12);
+    color:#fff;font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;
+  }
+  .pill.live{background:var(--live);border-color:transparent;font-family:var(--display);font-weight:800;letter-spacing:.06em}
+  .pill .rdot{width:8px;height:8px;border-radius:50%;background:#fff;animation:blink 1.4s infinite}
+  .pill .eye{width:14px;height:14px;opacity:.9}
+  .viewers b{font-variant-numeric:tabular-nums;font-family:var(--mono)}
+
+  /* faux progress that never lets you seek */
+  .livebar{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.14);z-index:3}
+  .livebar i{position:absolute;left:0;top:0;bottom:0;width:100%;background:var(--live);transform-origin:left;animation:crawl 22s linear infinite}
+  @keyframes crawl{from{transform:scaleX(.05)}to{transform:scaleX(1)}}
+
+  /* big tap-to-start (needed for autoplay-with-sound policies) */
+  .gate{
+    position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;cursor:pointer;
+    background:radial-gradient(600px 300px at 50% 40%, rgba(47,107,255,.25), rgba(4,7,16,.86));
+    text-align:center;padding:24px;
+  }
+  .gate .play{
+    width:78px;height:78px;border-radius:50%;background:var(--live);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 12px 34px rgba(255,45,67,.5);transition:transform .15s;
+  }
+  .gate:hover .play{transform:scale(1.06)}
+  .gate .play svg{width:30px;height:30px;margin-left:4px;fill:#fff}
+  .gate h2{font-family:var(--display);font-weight:800;font-size:20px;margin:2px 0 0}
+  .gate p{color:#c7d2ea;font-size:13.5px;margin:0;max-width:340px}
+  .gate .lbl{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.1em;color:#ff9aa6}
+
+  /* ---- below-video info ---- */
+  .info{margin-top:16px}
+  .info h1{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.01em;margin:0 0 6px;line-height:1.2}
+  .info .meta{display:flex;flex-wrap:wrap;gap:8px 16px;color:var(--ink-soft);font-size:13px;align-items:center}
+  .info .meta .host{display:flex;align-items:center;gap:8px;color:var(--ink)}
+  .info .meta .host .av{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#e0b13c,#b98a1f);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#2a1e05;font-family:var(--display)}
+  .cta-row{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap}
+  .btn{font-family:var(--display);font-weight:700;font-size:14px;border-radius:10px;padding:11px 18px;border:1px solid transparent;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:.15s}
+  .btn-gold{background:var(--gold);color:#241a04}
+  .btn-gold:hover{filter:brightness(1.06)}
+  .btn-ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+  .btn-ghost:hover{border-color:var(--blue);color:#fff}
+
+  /* ---- chat rail ---- */
+  .chat{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--line);border-radius:var(--radius);
+    display:flex;flex-direction:column;height:min(78vh,620px);overflow:hidden;
+    box-shadow:var(--shadow);
+  }
+  .chat .head{
+    padding:13px 15px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;flex:none;
+  }
+  .chat .head b{font-family:var(--display);font-weight:800;font-size:14px}
+  .chat .head .count{font-size:12px;color:var(--ink-soft);display:flex;align-items:center;gap:6px}
+  .chat .head .count .g{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(51,214,159,.18)}
+  .feed{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:11px;scroll-behavior:smooth}
+  .feed::-webkit-scrollbar{width:8px}
+  .feed::-webkit-scrollbar-thumb{background:#26314c;border-radius:8px}
+  .msg{display:flex;gap:9px;align-items:flex-start;animation:pop .25s ease}
+  @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .msg .av{width:28px;height:28px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#0b1020;font-family:var(--display)}
+  .msg .body{min-width:0}
+  .msg .who{font-size:12.5px;font-weight:700;color:var(--ink)}
+  .msg .who .tag{font-size:10px;font-weight:800;letter-spacing:.04em;color:#0b1020;background:var(--gold);padding:1px 6px;border-radius:6px;margin-left:6px;vertical-align:middle}
+  .msg .who .tag.host{background:var(--blue);color:#fff}
+  .msg .text{font-size:13px;color:var(--ink-soft);line-height:1.4;margin-top:1px;word-wrap:break-word}
+  .chat .compose{
+    flex:none;border-top:1px solid var(--line);padding:11px 12px;display:flex;gap:8px;align-items:center;
+  }
+  .chat .compose input{
+    flex:1;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;
+    color:var(--ink);font-size:13px;padding:10px 12px;font-family:var(--body);outline:none;
+  }
+  .chat .compose input:focus{border-color:var(--blue)}
+  .chat .compose input::placeholder{color:var(--ink-dim)}
+  .chat .compose button{
+    background:var(--blue);border:0;color:#fff;border-radius:9px;padding:0 14px;height:38px;
+    font-family:var(--display);font-weight:700;font-size:13px;cursor:pointer;flex:none;
+  }
+  .chat .compose button:hover{filter:brightness(1.08)}
+
+  .foot{margin-top:22px;text-align:center;color:var(--ink-dim);font-size:11.5px}
+  .foot .repl{color:var(--ink-soft)}
+
+  /* subtle "you" message differentiation */
+  .msg.you .text{color:var(--ink)}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">B</div>
+        <div class="txt">
+          <b>Blazupp Premium</b>
+          <span>Live product session</span>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <span class="badge-live"><span class="dot"></span>LIVE</span>
+    </div>
+
+    <div class="stage">
+      <!-- ============ VIDEO ============ -->
+      <div>
+        <div class="player" id="player">
+          <video id="vid" playsinline preload="metadata"
+                 poster="">
+            <!-- ▼▼▼ PUT YOUR MP4 HERE ▼▼▼ -->
+            <source src="YOUR_VIDEO.mp4" type="video/mp4">
+            <!-- ▲▲▲ replace YOUR_VIDEO.mp4 with your file name / URL ▲▲▲ -->
+          </video>
+
+          <!-- overlay chrome -->
+          <div class="ov tl">
+            <span class="pill live"><span class="rdot"></span>LIVE</span>
+            <span class="pill viewers">
+              <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <b id="viewers">0</b>&nbsp;watching
+            </span>
+          </div>
+
+          <div class="livebar"><i></i></div>
+
+          <!-- start gate -->
+          <div class="gate" id="gate">
+            <span class="lbl">● LIVE NOW</span>
+            <div class="play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+            <h2>Tap to join the session</h2>
+            <p>The stream is already running — tap to enter with sound.</p>
+          </div>
+        </div>
+
+        <div class="info">
+          <h1>Blazupp Premium — WhatsApp blasting, warm-up &amp; AI automation, live</h1>
+          <div class="meta">
+            <span class="host"><span class="av">SK</span> Hosted by the Blazupp Labs team</span>
+            <span>·</span>
+            <span>Kuala Lumpur, Malaysia 🇲🇾</span>
+          </div>
+          <div class="cta-row">
+            <a class="btn btn-gold" href="#" id="ctaSub">Subscribe to Blazupp Premium</a>
+            <a class="btn btn-ghost" href="#" id="ctaAsk">Ask a question</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ CHAT ============ -->
+      <div class="chat">
+        <div class="head">
+          <b>Live chat</b>
+          <span class="count"><span class="g"></span><span id="chatCount">0</span> here now</span>
+        </div>
+        <div class="feed" id="feed"></div>
+        <div class="compose">
+          <input id="chatInput" maxlength="160" placeholder="Say something…" autocomplete="off">
+          <button id="chatSend">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot">
+      Replay of a recorded Blazupp session. <span class="repl">Chat and viewer numbers are illustrative.</span>
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============================================================
+     CONFIG — tweak these to taste
+     ============================================================ */
+  var CONFIG = {
+    viewersBase: 180,        // roughly how many "viewers" to hover around
+    viewersJitter: 90,       // how much it drifts up/down
+    chatMinGap: 3500,        // min ms between auto chat messages
+    chatMaxGap: 9000,        // max ms between auto chat messages
+    subscribeUrl: "#",       // where "Subscribe" goes (your subscribe page)
+    // pool of names + a soft avatar palette
+  };
+
+  var NAMES = ["Wei Jie","Michelle","Ahmad","Nurul","Ravi","Jocelyn","Hafiz","Deborah",
+    "Kelvin","Sara","Irene","Bryan","Aisyah","Kumar","Sheryl","Zul","Vanessa","Farah",
+    "Daniel","Priya","Marcus","Siti","Jason","Adrian","Melissa","Hakim","Rachel","Grace",
+    "陈伟明","林晓慧","黄志强","李明豪","王丽萍","杨美玲","何俊杰","蔡佳颖","许志文","周家豪"];
+
+  // chat lines lean on the product's real language (blasting / warm-up / AI automation)
+  var LINES = [
+    "just joined 👋","from KL here","this blasting feature looks powerful",
+    "how many numbers can I warm up at once?","the AI auto-reply is exactly what I need",
+    "does the warm-up really stop the bans?","broadcasting to my whole client list 🔥",
+    "can it send to groups too?","how much is the team package?","following from Penang",
+    "我在看 👀","这个养号功能很实用","AI 自动化太方便了","广播信息可以发多少个？",
+    "does it work with WhatsApp Business?","how fast is the setup?","interested in the agency plan",
+    "the demo is really clear 👍","can I try it first?","how do I subscribe?",
+    "already using it, works great","from Johor 🙌","what's the price for 5 seats?",
+    "the auto follow-up saves me hours","can it handle Chinese messages?",
+    "how do I warm up a new number?","this is a game changer for agents"
+  ];
+
+  var HOST_LINES = [
+    {who:"Blazupp Labs", host:true, text:"Welcome everyone! Drop your questions in the chat 👇"},
+    {who:"Blazupp Labs", host:true, text:"Yes — warm-up runs automatically to keep your number healthy."},
+    {who:"Blazupp Labs", host:true, text:"Team plans start with 5 seats. Details on the subscribe page."},
+    {who:"Blazupp Labs", host:true, text:"You can blast, warm up and auto-reply from one dashboard."},
+  ];
+
+  var AV_COLORS = ["#e0b13c","#33d69f","#2f6bff","#ff7a59","#a78bfa","#f472b6","#38bdf8","#facc15"];
+
+  function rnd(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+  function pick(arr){ return arr[rnd(0,arr.length-1)]; }
+  function initials(name){
+    var p=String(name).trim().split(/\s+/);
+    if(/[\u4e00-\u9fff]/.test(name)) return name.slice(0,1);
+    return ((p[0]||"?")[0]+((p[1]||"")[0]||"")).toUpperCase();
+  }
+  function avColor(seed){ var s=0; for(var i=0;i<seed.length;i++) s+=seed.charCodeAt(i); return AV_COLORS[s%AV_COLORS.length]; }
+
+  /* ---------- viewer count drift ---------- */
+  var viewersEl = document.getElementById("viewers");
+  var chatCountEl = document.getElementById("chatCount");
+  var current = CONFIG.viewersBase + rnd(-20,20);
+  function paintViewers(){
+    viewersEl.textContent = current.toLocaleString("en-MY");
+    // "here now" reads a little lower than total watching, feels real
+    chatCountEl.textContent = Math.max(1, Math.round(current*0.72)).toLocaleString("en-MY");
+  }
+  paintViewers();
+  setInterval(function(){
+    // gentle random walk, bounded
+    var drift = rnd(-6,7);
+    current = Math.max(CONFIG.viewersBase-CONFIG.viewersJitter,
+              Math.min(CONFIG.viewersBase+CONFIG.viewersJitter, current+drift));
+    paintViewers();
+  }, 2600);
+
+  /* ---------- chat feed ---------- */
+  var feed = document.getElementById("feed");
+  function addMsg(who, text, opts){
+    opts = opts||{};
+    var row = document.createElement("div");
+    row.className = "msg"+(opts.you?" you":"");
+    var col = opts.host? "#2f6bff" : avColor(who);
+    var tag = opts.host? '<span class="tag host">HOST</span>'
+            : opts.you? '<span class="tag">YOU</span>' : '';
+    row.innerHTML =
+      '<div class="av" style="background:'+col+(opts.host?';color:#fff':'')+'">'+initials(who)+'</div>'+
+      '<div class="body"><div class="who">'+escapeHtml(who)+tag+'</div>'+
+      '<div class="text">'+escapeHtml(text)+'</div></div>';
+    feed.appendChild(row);
+    // keep the feed from growing unbounded
+    while(feed.children.length > 60) feed.removeChild(feed.firstChild);
+    feed.scrollTop = feed.scrollHeight;
+  }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+  // seed a few so it doesn't start empty
+  (function seed(){
+    addMsg(HOST_LINES[0].who, HOST_LINES[0].text, {host:true});
+    for(var i=0;i<4;i++) addMsg(pick(NAMES), pick(LINES));
+  })();
+
+  var hostIdx = 1;
+  function tickChat(){
+    // ~1 in 7 messages is from the host, to feel guided
+    if(Math.random() < 0.14 && hostIdx < HOST_LINES.length){
+      var h = HOST_LINES[hostIdx++]; addMsg(h.who, h.text, {host:true});
+    } else {
+      addMsg(pick(NAMES), pick(LINES));
+    }
+    setTimeout(tickChat, rnd(CONFIG.chatMinGap, CONFIG.chatMaxGap));
+  }
+  setTimeout(tickChat, rnd(CONFIG.chatMinGap, CONFIG.chatMaxGap));
+
+  // let the viewer "chat" too (local only)
+  var input = document.getElementById("chatInput");
+  var send = document.getElementById("chatSend");
+  function submitChat(){
+    var v = input.value.trim(); if(!v) return;
+    addMsg("You", v, {you:true});
+    input.value="";
+    // a friendly auto-reply from the host after a beat
+    setTimeout(function(){
+      addMsg("Blazupp Labs", pick([
+        "Great question! Our team will follow up 🙌",
+        "Thanks for joining! Check the subscribe button below 👇",
+        "Good point — the AI handles that automatically.",
+        "Appreciate you being here! 🔥"
+      ]), {host:true});
+    }, rnd(1400,2800));
+  }
+  send.addEventListener("click", submitChat);
+  input.addEventListener("keydown", function(e){ if(e.key==="Enter") submitChat(); });
+
+  /* ---------- start gate + playback ---------- */
+  var gate = document.getElementById("gate");
+  var vid = document.getElementById("vid");
+
+  // Try muted autoplay immediately (allowed by browsers). The gate is for sound.
+  vid.muted = true;
+  var p = vid.play && vid.play();
+  if(p && p.catch) p.catch(function(){ /* will start on tap */ });
+
+  gate.addEventListener("click", function(){
+    // Hide the gate immediately on tap — never leave the user staring at a
+    // gate that won't dismiss because play() is slow, hung, or the file is missing.
+    gate.style.display = "none";
+    vid.muted = false;
+    var pr = vid.play();
+    if(pr && pr.catch){
+      pr.catch(function(){
+        // couldn't autoplay with sound (or file issue) — fall back to native
+        // controls so the visitor can start it themselves.
+        vid.setAttribute("controls","controls");
+      });
+    }
+  });
+
+  // "simulated live": loop so it always feels current.
+  vid.loop = true;
+  // If native controls ever appear (autoplay fallback) and someone scrubs
+  // backward, nudge them forward again so it keeps the "live" feel. Guarded so
+  // it never fights normal playback or loop wrap-around.
+  var lastT = 0;
+  vid.addEventListener("timeupdate", function(){ lastT = vid.currentTime; });
+  vid.addEventListener("seeked", function(){
+    if(vid.seekable && vid.duration && vid.currentTime < lastT - 1.5){
+      // jumped backward by more than ~1.5s → snap back toward where "live" was
+      try { vid.currentTime = Math.max(0, lastT); } catch(e){}
+    }
+  });
+
+  // CTA hooks
+  document.getElementById("ctaSub").addEventListener("click", function(e){
+    if(CONFIG.subscribeUrl==="#"){ e.preventDefault(); }
+    else window.location.href = CONFIG.subscribeUrl;
+  });
+  document.getElementById("ctaAsk").addEventListener("click", function(e){
+    e.preventDefault(); input.focus();
+  });
+})();
+</script>
+</body>
+</html>
