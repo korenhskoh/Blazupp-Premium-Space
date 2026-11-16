@@ -3311,6 +3311,7 @@ function recBulkBar(){
   var paid=sel.filter(function(r){return r.status==='Paid';}).length;
   return '<div class="rec-bulkbar">'
     +'<b class="rbb-count">'+ids.length+' selected</b>'
+    +'<button class="rbb-btn" onclick="downloadSelectedInvoices()">⬇ Download PDFs</button>'
     +'<button class="rbb-btn" onclick="downloadSelectedReceipts()">🧾 Receipts ('+paid+' paid)</button>'
     +(sndAllowed()&&SETTINGS.sndWa!==false?'<button class="rbb-btn wa" onclick="sendSelectedRecords(\'wa\')">🟢 WhatsApp</button>':'')
     +(sndAllowed()&&SETTINGS.sndEmail!==false?'<button class="rbb-btn em" onclick="sendSelectedRecords(\'email\')">✉ Email</button>':'')
@@ -3891,6 +3892,40 @@ async function downloadReceipt(id){
   toast('Building receipt…');
   try{ var inv=recordToInv(r); var pdf=await makePdf(inv,'receipt'); pdf.save(fileName(inv,'receipt')); toast('Receipt ready · '+receiptNo(inv)); }
   catch(e){ toast('Receipt failed'); console.error(e); }
+}
+async function downloadSelectedInvoices(){
+  var sel=RECORDS.filter(function(r){return REC_SEL[r.id];});
+  if(!sel.length){ toast('Select some invoices first'); return; }
+  toast('Preparing PDF engine…');
+  try{ await ensureLibs(); }catch(e){ toast('Could not load PDF engine'); console.error(e); return; }
+  // One file = fine to save directly; many = bundle into a single ZIP.
+  if(sel.length===1){
+    try{ var inv1=recordToInv(sel[0]); var p1=await makePdf(inv1,'invoice'); p1.save(fileName(inv1,'invoice')); toast('Invoice downloaded ✓'); }
+    catch(e){ toast('PDF failed'); console.error(e); }
+    return;
+  }
+  var zip=new JSZip(), ok=0, fail=0, used={};
+  for(var i=0;i<sel.length;i++){
+    toast('Invoice '+(i+1)+'/'+sel.length+'…');
+    try{
+      var inv=recordToInv(sel[i]);
+      var pdf=await makePdf(inv,'invoice');
+      var nm=fileName(inv,'invoice');
+      if(used[nm]){ used[nm]++; nm=nm.replace(/\.pdf$/i,'')+'-'+used[nm]+'.pdf'; } else used[nm]=1;
+      zip.file(nm, pdf.output('blob'));
+      ok++;
+    }catch(e){ fail++; console.error(e); }
+    await new Promise(function(r){setTimeout(r,60);});
+  }
+  if(!ok){ toast('No PDFs could be generated'); return; }
+  toast('Zipping '+ok+' invoice'+(ok===1?'':'s')+'…');
+  var blob=await zip.generateAsync({type:'blob'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='invoices-'+todayISO()+'.zip';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 3000);
+  toast(ok+' invoice'+(ok===1?'':'s')+' downloaded as ZIP'+(fail?(' ('+fail+' failed)'):'')+' ✓');
 }
 async function downloadSelectedReceipts(){
   var sel=RECORDS.filter(function(r){return REC_SEL[r.id] && r.status==='Paid';});
