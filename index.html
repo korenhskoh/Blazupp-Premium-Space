@@ -210,6 +210,7 @@
   #recordsList .menu button.danger{color:#dc2626}
   #recordsList .menu button.danger:hover{background:#fdecec}
   #recordsList .menu .sep{height:1px;background:var(--line);margin:4px 2px}
+  #recMenuBackdrop{display:none;position:fixed;inset:0;background:rgba(15,25,50,.34);z-index:1100}
   /* ---- Records bulk action bar ---- */
   #recordsList .rec-bulkbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:11px 14px;margin:0 0 10px;
     background:linear-gradient(180deg,#1b3a7a,#13286b);border-radius:12px;box-shadow:0 6px 18px rgba(19,40,107,.22)}
@@ -861,7 +862,12 @@ tr.is-import td:first-child{box-shadow:inset 3px 0 0 #93a9dd}
   #recordsList td.acts-cell .acts,#recordsList .acts{width:100%;gap:8px}
   #recordsList .rbtn{flex:1 1 auto;justify-content:center;min-height:40px;font-size:13px}
   #recordsList .rbtn.more{flex:0 0 auto;min-width:44px}
-  #recordsList .menu{position:fixed;left:12px;right:12px;top:auto;min-width:0;width:auto}
+  /* overflow menu as a bottom sheet — fixed so no parent can clip it */
+  #recordsList .menu{position:fixed;left:10px;right:10px;bottom:10px;top:auto;min-width:0;width:auto;
+    max-height:70vh;overflow:auto;border-radius:16px;box-shadow:0 -12px 44px rgba(15,25,50,.26);padding:8px;z-index:1200}
+  #recordsList .menu button{padding:14px 14px;font-size:15px;border-radius:10px}
+  #recordsList .menu .sep{margin:6px 2px}
+  body.rec-menu-open #recMenuBackdrop{display:block}
 
   /* --- Records bulk bar: stack neatly, Clear on its own row --- */
   #recordsList .rec-bulkbar{gap:8px;padding:12px}
@@ -2826,14 +2832,21 @@ function tgSummary(inv){
 }
 function tgSleep(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
 async function tgPost(method, fd){
+  var lastErr;
   for(var i=0;i<4;i++){
-    var res=await fetch('https://api.telegram.org/bot'+(SETTINGS.tgToken||'').trim()+'/'+method,{method:'POST',body:fd});
-    if(res.status===429){ var rj=await res.json().catch(function(){return {};}); var w=((rj.parameters&&rj.parameters.retry_after)||1); await tgSleep((w+0.5)*1000); continue; }
-    var j=await res.json().catch(function(){return {};});
-    if(!res.ok || !j.ok) throw new Error(j.description||('HTTP '+res.status));
-    return j;
+    try{
+      var res=await fetch('https://api.telegram.org/bot'+(SETTINGS.tgToken||'').trim()+'/'+method,{method:'POST',body:fd});
+      if(res.status===429){ var rj=await res.json().catch(function(){return {};}); var w=((rj.parameters&&rj.parameters.retry_after)||1); await tgSleep((w+0.5)*1000); continue; }
+      var j=await res.json().catch(function(){return {};});
+      if(!res.ok || !j.ok) throw new Error(j.description||('HTTP '+res.status));
+      return j;
+    }catch(e){
+      lastErr=e;
+      if(e instanceof TypeError){ await tgSleep(1200); continue; }  // mobile network blip — retry
+      throw e;
+    }
   }
-  throw new Error('Telegram rate-limited — try again');
+  throw lastErr||new Error('Telegram rate-limited — try again');
 }
 async function tgSendText(text){
   if(!tgConfigured()) throw new Error('Telegram not configured');
@@ -2900,9 +2913,16 @@ function openPdfBlob(blob){
 async function makePdf(inv, mode){
   await ensureLibs();
   var jsPDF=window.jspdf.jsPDF;
-  var pdf=new jsPDF('p','mm','a4');
-  var c=await invoiceCanvas(inv, mode); addCanvasToPdf(pdf,c);
-  return pdf;
+  var lastErr;
+  // html2canvas can intermittently fail on mobile (memory) — try twice before giving up
+  for(var attempt=0;attempt<2;attempt++){
+    try{
+      var pdf=new jsPDF('p','mm','a4');
+      var c=await invoiceCanvas(inv, mode); addCanvasToPdf(pdf,c);
+      return pdf;
+    }catch(e){ lastErr=e; await new Promise(function(r){setTimeout(r,250);}); }
+  }
+  throw lastErr||new Error('pdf_build_failed');
 }
 /* A receipt number is derived from the invoice number so it's stable and unique:
    B190712 -> R190712. Nothing new to store. */
@@ -3346,14 +3366,19 @@ function recBulkBar(){
     +'<button class="rbb-btn clear" onclick="recClearSel()">Clear</button>'
     +'</div>';
 }
+function recMenuBackdrop(){
+  var bd=document.getElementById('recMenuBackdrop');
+  if(!bd){ bd=document.createElement('div'); bd.id='recMenuBackdrop'; bd.addEventListener('click',closeRecMenu); document.body.appendChild(bd); }
+  return bd;
+}
 function toggleRecMenu(ev, id){
   ev.stopPropagation();
   var m=document.getElementById('recmenu-'+id); if(!m) return;
   var wasOpen=m.classList.contains('show');
   closeRecMenu();
-  if(!wasOpen) m.classList.add('show');
+  if(!wasOpen){ recMenuBackdrop(); m.classList.add('show'); document.body.classList.add('rec-menu-open'); }
 }
-function closeRecMenu(){ document.querySelectorAll('#recordsList .menu.show').forEach(function(m){ m.classList.remove('show'); }); }
+function closeRecMenu(){ document.querySelectorAll('#recordsList .menu.show').forEach(function(m){ m.classList.remove('show'); }); document.body.classList.remove('rec-menu-open'); }
 document.addEventListener('click', function(e){ if(!e.target.closest('.menu-wrap')) closeRecMenu();
   if(!e.target.closest('.rbb-btn.mark') && !e.target.closest('#bulkStatusMenu')){ var m=document.getElementById('bulkStatusMenu'); if(m) m.remove(); } });
 function recSelectOne(id,on){ if(on) REC_SEL[id]=true; else delete REC_SEL[id]; renderRecords(); }
@@ -3543,16 +3568,43 @@ function sndAllowed(){
   if(SESSION && SESSION.role==='admin') return true;
   return SETTINGS.sndStaff!==false;
 }
-function sndPost(path, payload){
-  return fetch((SETTINGS.sndUrl||'').replace(/\/+$/,'')+path, {
-    method:'POST',
-    headers:{'Content-Type':'application/json','X-Send-Key':(SETTINGS.sndKey||'')},
-    body:JSON.stringify(payload)
-  }).then(async function(r){
-    var d={}; try{ d=await r.json(); }catch(e){}
-    if(!r.ok || !d.ok) throw new Error(d.error||('http_'+r.status));
-    return d;
-  });
+function sndPost(path, payload, opts){
+  opts=opts||{};
+  var url=(SETTINGS.sndUrl||'').replace(/\/+$/,'')+path;
+  var maxTries=(opts.retries==null?1:opts.retries)+1;   // 1 retry by default = 2 attempts
+  var timeout=opts.timeout||60000;                        // mobile + cold-start headroom
+  function attempt(n){
+    var ctrl=('AbortController' in window)?new AbortController():null;
+    var to=ctrl?setTimeout(function(){ try{ctrl.abort();}catch(e){} },timeout):null;
+    return fetch(url,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Send-Key':(SETTINGS.sndKey||'')},
+      body:JSON.stringify(payload),
+      signal:ctrl?ctrl.signal:undefined
+    }).then(async function(r){
+      if(to) clearTimeout(to);
+      var d={}; try{ d=await r.json(); }catch(e){}
+      if(!r.ok || !d.ok){
+        // retry only on gateway / cold-start / rate-limit — the app didn't process it
+        if(n<maxTries && (r.status===502||r.status===503||r.status===504||r.status===429)){
+          await new Promise(function(res){setTimeout(res,1400);});
+          return attempt(n+1);
+        }
+        throw new Error(d.error||('http_'+r.status));
+      }
+      return d;
+    }).catch(async function(e){
+      if(to) clearTimeout(to);
+      // network drop / abort / timeout — retry once (sends are near-instant, so a timeout means it never completed)
+      var transient=(e&&e.name==='AbortError')||(e instanceof TypeError);
+      if(n<maxTries && transient){
+        await new Promise(function(res){setTimeout(res,1400);});
+        return attempt(n+1);
+      }
+      throw e;
+    });
+  }
+  return attempt(1);
 }
 async function blobToB64(blob){
   return await new Promise(function(res,rej){
