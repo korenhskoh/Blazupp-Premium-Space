@@ -1696,6 +1696,8 @@ tr.is-import td:first-child{box-shadow:inset 3px 0 0 #93a9dd}
       <label class="inline-toggle" style="margin:0;padding:9px 0"><input type="checkbox" id="set_sndEmail"> Offer Email send</label>
     </div>
     <label class="inline-toggle" style="margin:2px 0 0;padding:6px 0"><input type="checkbox" id="set_sndStaff"> Let staff send too <small style="color:var(--ink-soft)">— off = only admin can send WhatsApp/Email</small></label>
+    <label class="inline-toggle" style="margin:2px 0 0;padding:6px 0"><input type="checkbox" id="set_waEnabled" onchange="waToggle(this.checked)"> Keep WhatsApp connected <small style="color:var(--ink-soft)">— off = the service won't connect or show a QR</small></label>
+    <div id="set_waToggleStatus" style="font-size:11.5px;color:var(--ink-soft);margin:2px 0 6px"></div>
     <div style="margin:2px 0 4px"><button class="btn btn-ghost btn-sm" type="button" onclick="sndTest()">Check service</button> <small style="color:var(--ink-soft)">pings /status — shows if WhatsApp &amp; Gmail are ready</small></div>
     <div id="set_sndStatus" style="font-size:12px;margin:8px 0 2px;padding:8px 11px;border-radius:9px"></div>
 
@@ -3613,6 +3615,19 @@ async function blobToB64(blob){
     fr.onerror=rej; fr.readAsDataURL(blob);
   });
 }
+async function waToggle(on){
+  var st=document.getElementById('set_waToggleStatus');
+  SETTINGS.waEnabled=!!on; persist();
+  try{ pushCentralSettings(); }catch(e){}
+  if(!sndReady()){ if(st){ st.style.color='#9f1239'; st.textContent='Saved. Set the Sender service URL & key above, then it will apply on the service.'; } return; }
+  if(st){ st.style.color='var(--ink-soft)'; st.textContent=on?'Turning WhatsApp on…':'Turning WhatsApp off…'; }
+  try{
+    await sndPost('/wa/toggle', { on: !!on });
+    if(st){ st.style.color='#0f7a44'; st.textContent=on?'✓ WhatsApp enabled on the service. Scan the QR at /wa/qr if not linked.':'✓ WhatsApp disabled on the service — it won’t connect.'; }
+  }catch(e){
+    if(st){ st.style.color='#9f1239'; st.textContent='Saved, but could not reach the service: '+(e.message||e); }
+  }
+}
 async function sndTest(){
   var el=document.getElementById('set_sndStatus');
   var set=function(bg,bd,fg,html){ el.style.background=bg; el.style.border='1px solid '+bd; el.style.color=fg; el.innerHTML=html; };
@@ -4782,6 +4797,8 @@ function openSettings(){
   document.getElementById('set_sndWa').checked=SETTINGS.sndWa!==false;
   document.getElementById('set_sndEmail').checked=SETTINGS.sndEmail!==false;
   document.getElementById('set_sndStaff').checked=SETTINGS.sndStaff!==false;
+  document.getElementById('set_waEnabled').checked=SETTINGS.waEnabled!==false;
+  var wts=document.getElementById('set_waToggleStatus'); if(wts) wts.textContent='';
   // Gmail SMTP — non-secret parts only (password is never stored client-side)
   document.getElementById('set_smtpUser').value=SETTINGS.smtpUser||'';
   document.getElementById('set_smtpFrom').value=SETTINGS.smtpFrom||'';
@@ -4827,6 +4844,7 @@ function saveSettings(){
   SETTINGS.sndKey=(document.getElementById('set_sndKey').value||'').trim();
   SETTINGS.sndWa=document.getElementById('set_sndWa').checked;
   SETTINGS.sndEmail=document.getElementById('set_sndEmail').checked;
+  SETTINGS.waEnabled=document.getElementById('set_waEnabled').checked;
   SETTINGS.sndStaff=document.getElementById('set_sndStaff').checked;
   // Gmail SMTP non-secret fields (password handled separately in saveSmtp — never stored here)
   SETTINGS.smtpUser=(document.getElementById('set_smtpUser').value||'').trim();
@@ -4954,7 +4972,7 @@ function paintSendButtons(){
   map.forEach(function(m){ var el=document.getElementById(m[0]); if(el) el.style.display=m[1]?'':'none'; });
 }
 var CENTRAL_OK=null;
-var CENTRAL_KEYS=['company','tagline','bankName','accName','accNo','swift','banks','currency','thanks','sellerTin','sellerBrn','sellerSst','msic','classification','tgToken','tgChat','tgAuto','fileTpl','annualPct','annualMin','annualMax','sndUrl','sndKey','sndWa','sndEmail','sndStaff','smtpUser','smtpFrom','smtpHost','smtpPort','smtpSavedAt','waInvoice','waReceipt','emailInvoiceSubject','emailInvoiceBody','emailReceiptSubject','emailReceiptBody','remWaCustomer','remWaAdmin','remEmailCustomerSubject','remEmailAdminSubject','remEmailCustomerBody','remEmailAdminBody','remLeadHours','remAllCustomers','autoWa','autoEmail','subWaCustomer','subEmailSubject','subEmailBody'];
+var CENTRAL_KEYS=['company','tagline','bankName','accName','accNo','swift','banks','currency','thanks','sellerTin','sellerBrn','sellerSst','msic','classification','tgToken','tgChat','tgAuto','fileTpl','annualPct','annualMin','annualMax','sndUrl','sndKey','sndWa','sndEmail','sndStaff','waEnabled','smtpUser','smtpFrom','smtpHost','smtpPort','smtpSavedAt','waInvoice','waReceipt','emailInvoiceSubject','emailInvoiceBody','emailReceiptSubject','emailReceiptBody','remWaCustomer','remWaAdmin','remEmailCustomerSubject','remEmailAdminSubject','remEmailCustomerBody','remEmailAdminBody','remLeadHours','remAllCustomers','autoWa','autoEmail','subWaCustomer','subEmailSubject','subEmailBody'];
 async function loadCentralSettings(){
   try{
     var d=await sbRpc('get_settings',{p_token:SESSION.token});
