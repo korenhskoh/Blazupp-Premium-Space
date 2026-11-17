@@ -3122,6 +3122,29 @@ function editRecord(id){
   if(!inv){ toast('Invoice not found'); return; }
   toast('Editing '+inv.number+' — make changes then press Save changes');
 }
+/* duplicate a record into a fresh draft (new number, today's date) */
+function duplicateRecord(id){
+  if(!can('edit_invoice')){ toast('You do not have permission to create invoices'); return; }
+  var r=recById(id); if(!r){ toast('Invoice not found'); return; }
+  var inv=recordToInv(r);
+  newSingle();                         // clears EDIT_ID, assigns a fresh auto number + today's date
+  document.getElementById('s_status').value='Unpaid';
+  document.getElementById('s_name').value=inv.name||'';
+  document.getElementById('s_phone').value=toPlusPhone(inv.phone||'');
+  document.getElementById('s_email').value=inv.email||'';
+  document.getElementById('s_btin').value=inv.buyerTin||'';
+  document.getElementById('s_breg').value=inv.buyerReg||'';
+  document.getElementById('s_class').value=inv.classification||SETTINGS.classification||'';
+  document.getElementById('s_bill').value=inv.bill||'Lifetime';
+  document.getElementById('s_taxOn').checked=!!inv.taxOn; document.getElementById('s_taxRate').value=inv.taxRate;
+  document.getElementById('s_discOn').checked=!!inv.discOn; document.getElementById('s_disc').value=inv.disc;
+  document.getElementById('s_annOn').checked=!!inv.annualOn; document.getElementById('s_annPct').value=inv.annualPct||SETTINGS.annualPct||3; applyAnnualBounds();
+  document.getElementById('s_items').innerHTML='';
+  (inv.items||[]).forEach(function(it){ itemAdd(it.item,it.desc,it.qty,it.price); });
+  if(!(inv.items||[]).length) itemAdd('','Lifetime',1,0);
+  switchTab('single'); refreshPreview();
+  toast('Duplicated '+(inv.number||'')+' → new draft. Review, set the date, then Save.');
+}
 /* edit several selected records one-by-one */
 function editSelectedRecords(){
   if(!can('edit_invoice')){ toast('You do not have permission to edit invoices'); return; }
@@ -3286,6 +3309,7 @@ function renderRecords(){
       var canEdit=can('edit_invoice'), canDel=can('delete_invoice');
       if(canEdit||canDel){ menu+='<div class="sep"></div>';
         if(canEdit) menu+='<button onclick="closeRecMenu();editRecord(\''+r.id+'\')">✏ Edit invoice</button>';
+        if(canEdit) menu+='<button onclick="closeRecMenu();duplicateRecord(\''+r.id+'\')">⧉ Duplicate</button>';
         if(canDel) menu+='<button class="danger" onclick="closeRecMenu();deleteRecord(\''+r.id+'\')">✕ Delete</button>'; }
       var moreBtn='<div class="menu-wrap"><button class="rbtn more" onclick="toggleRecMenu(event,\''+r.id+'\')" title="More">⋯</button>'
         +'<div class="menu" id="recmenu-'+r.id+'">'+menu+'</div></div>';
