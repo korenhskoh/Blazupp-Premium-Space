@@ -1724,6 +1724,18 @@ tr.is-import td:first-child{box-shadow:inset 3px 0 0 #93a9dd}
       <div id="set_smtpStatus" style="font-size:12px;margin:8px 0 2px"></div>
     </div>
 
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+      <h3 style="font-family:'Plus Jakarta Sans';font-size:13px;margin:0 0 4px">🤖 Anthropic API key (AI smart-paste)</h3>
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:0 0 10px">Powers the Telegram bot's <b>Smart paste</b> — paste messy customer details and AI fills the invoice. The key is sent straight to your service, verified, and <b>never stored in this app or the database</b>.</p>
+      <div class="field"><label>API key <small style="color:var(--ink-soft)">· starts with sk-ant-</small></label>
+        <input id="set_aiKey" type="password" placeholder="•••• enter to set / change" autocomplete="new-password" autocapitalize="none"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-gold btn-sm" type="button" onclick="saveAiKey()">Save key to service</button>
+        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" style="font-size:11.5px;color:var(--blue)">Get an Anthropic API key →</a>
+      </div>
+      <div id="set_aiStatus" style="font-size:12px;margin:8px 0 2px"></div>
+    </div>
+
     </section>
     <section class="settab" data-tab="templates">
     <h3 style="font-family:'Plus Jakarta Sans';font-size:13px;margin:2px 0 4px">Invoice &amp; receipt messages</h3>
@@ -3642,6 +3654,28 @@ async function sndTest(){
   }catch(e){ set('#fff1f2','#f5c2c7','#9f1239','Could not reach the service \u2014 check the URL.'); }
 }
 
+/* Save the Anthropic API key to the sender service (write-only, never stored client-side). */
+async function saveAiKey(){
+  var st=document.getElementById('set_aiStatus');
+  var key=(document.getElementById('set_aiKey').value||'').trim();
+  if(!sndReady()){ st.innerHTML='<span style="color:#b4770f">Set the Sender service URL &amp; key above first.</span>'; return; }
+  if(!key){ st.innerHTML='<span style="color:#b4770f">Paste your Anthropic API key (starts with sk-ant-).</span>'; return; }
+  st.innerHTML='<span style="color:var(--ink-soft)">Verifying &amp; saving to the service…</span>';
+  try{
+    await sndPost('/set-aikey', { key:key });
+    SETTINGS.aiSavedAt=new Date().toISOString();
+    document.getElementById('set_aiKey').value='';
+    persist(); pushCentralSettings();
+    st.innerHTML='<span style="color:#0f7a44">✓ Key verified &amp; saved. The bot’s Smart paste is now enabled.</span>';
+  }catch(e){
+    var m=String(e&&e.message||e);
+    if(/404|not.?found/i.test(m)) st.innerHTML='<span style="color:#9f1239">Your service doesn’t have the /set-aikey endpoint yet — deploy the latest service files first.</span>';
+    else if(/auth_failed|401|403|invalid/i.test(m)) st.innerHTML='<span style="color:#9f1239">Anthropic rejected the key — check it’s a valid sk-ant- key with credit.</span>';
+    else if(/bad_key_format/i.test(m)) st.innerHTML='<span style="color:#9f1239">That doesn’t look like an API key (should start with sk-).</span>';
+    else st.innerHTML='<span style="color:#9f1239">Could not save: '+esc(m)+'</span>';
+    console.error('[aikey] save failed', e);
+  }
+}
 /* Save Gmail / SMTP credentials to the sender service (password is write-only, never stored client-side). */
 async function saveSmtp(){
   var st=document.getElementById('set_smtpStatus');
@@ -4808,6 +4842,12 @@ function openSettings(){
   document.getElementById('set_smtpStatus').innerHTML = SETTINGS.smtpSavedAt
     ? '<span style="color:#0f7a44">✓ Gmail saved to the service ('+esc(String(SETTINGS.smtpSavedAt).slice(0,10))+'). Leave the password blank to keep it.</span>'
     : '<span style="color:var(--ink-soft)">Not set yet. Enter your Gmail + App Password, then Save.</span>';
+  // Anthropic API key — write-only; show saved status only
+  var aiKeyEl=document.getElementById('set_aiKey'); if(aiKeyEl) aiKeyEl.value='';
+  var aiSt=document.getElementById('set_aiStatus');
+  if(aiSt) aiSt.innerHTML = SETTINGS.aiSavedAt
+    ? '<span style="color:#0f7a44">✓ Key saved to the service ('+esc(String(SETTINGS.aiSavedAt).slice(0,10))+'). Leave blank to keep it.</span>'
+    : '<span style="color:var(--ink-soft)">Not set yet. Paste your Anthropic key, then Save.</span>';
   document.getElementById('set_remLeadHours').value=(SETTINGS.remLeadHours!=null?SETTINGS.remLeadHours:'');
   document.getElementById('set_remAllCustomers').checked=(SETTINGS.remAllCustomers===true||SETTINGS.remAllCustomers==='true');
   document.getElementById('set_autoWa').checked=(SETTINGS.autoWa===true);
@@ -4972,7 +5012,7 @@ function paintSendButtons(){
   map.forEach(function(m){ var el=document.getElementById(m[0]); if(el) el.style.display=m[1]?'':'none'; });
 }
 var CENTRAL_OK=null;
-var CENTRAL_KEYS=['company','tagline','bankName','accName','accNo','swift','banks','currency','thanks','sellerTin','sellerBrn','sellerSst','msic','classification','tgToken','tgChat','tgAuto','fileTpl','annualPct','annualMin','annualMax','sndUrl','sndKey','sndWa','sndEmail','sndStaff','waEnabled','smtpUser','smtpFrom','smtpHost','smtpPort','smtpSavedAt','waInvoice','waReceipt','emailInvoiceSubject','emailInvoiceBody','emailReceiptSubject','emailReceiptBody','remWaCustomer','remWaAdmin','remEmailCustomerSubject','remEmailAdminSubject','remEmailCustomerBody','remEmailAdminBody','remLeadHours','remAllCustomers','autoWa','autoEmail','subWaCustomer','subEmailSubject','subEmailBody'];
+var CENTRAL_KEYS=['company','tagline','bankName','accName','accNo','swift','banks','currency','thanks','sellerTin','sellerBrn','sellerSst','msic','classification','tgToken','tgChat','tgAuto','fileTpl','annualPct','annualMin','annualMax','sndUrl','sndKey','sndWa','sndEmail','sndStaff','waEnabled','smtpUser','smtpFrom','smtpHost','smtpPort','smtpSavedAt','aiSavedAt','waInvoice','waReceipt','emailInvoiceSubject','emailInvoiceBody','emailReceiptSubject','emailReceiptBody','remWaCustomer','remWaAdmin','remEmailCustomerSubject','remEmailAdminSubject','remEmailCustomerBody','remEmailAdminBody','remLeadHours','remAllCustomers','autoWa','autoEmail','subWaCustomer','subEmailSubject','subEmailBody'];
 async function loadCentralSettings(){
   try{
     var d=await sbRpc('get_settings',{p_token:SESSION.token});
